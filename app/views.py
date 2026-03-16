@@ -8,7 +8,6 @@ from app.models import UserProfile
 from app.forms import LoginForm, UploadForm
 
 
-
 ###
 # Routing for your application.
 ###
@@ -42,28 +41,22 @@ def upload():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    form = LoginForm()
-
-    if form.validate_on_submit():
-        uname = form.username.data
+    form = LoginForm()  # assuming you have a Flask-WTF form called LoginForm
+    if form.validate_on_submit():  # ensures username and password were entered
+        username = form.username.data
         password = form.password.data
 
-        user = UserProfile.query.filter_by(username=uname).first()
+        # Query the database for the user
+        user = UserProfile.query.filter_by(username=username).first()
 
-        if user and user.check_password(password):
-            login_user(user)
-            flash("Login successful!", "success")
-            return redirect(url_for("upload"))
+        if user and check_password_hash(user.password, password):
+            login_user(user)  # logs the user in
+            flash('You have successfully logged in!', 'success')
+            return redirect(url_for('upload'))  # redirect to /upload route
         else:
-            flash("Invalid username or password.", "danger")
+            flash('Invalid username or password', 'danger')
 
-    return render_template("login.html", form=form)
-
-# user_loader callback. This callback is used to reload the user object from
-# the user ID stored in the session
-@login_manager.user_loader
-def load_user(id):
-    return db.session.execute(db.select(UserProfile).filter_by(id=id)).scalar()
+    return render_template('login.html', form=form)
 
 # user_loader callback. This callback is used to reload the user object from
 # the user ID stored in the session
@@ -83,12 +76,50 @@ def flash_errors(form):
                 getattr(form, field).label.text,
                 error
 ), 'danger')
+            
+
+# Helper function to get list of uploaded images
+def get_uploaded_images():
+    uploaded_files = []
+    upload_folder = app.config['UPLOAD_FOLDER']
+    
+    if not os.path.exists(upload_folder):
+        return uploaded_files  # Return empty list if folder doesn't exist
+
+    for file in os.listdir(upload_folder):
+        if file.lower().endswith(('.png', '.jpg', '.jpeg')):  # Filter image files only
+            uploaded_files.append(file)
+    
+    return uploaded_files
+
+
+# Route to serve uploaded images
+@app.route('/uploads/<filename>')
+def get_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
+# Route to display list of uploaded images
+@app.route('/files')
+@login_required
+def files():
+    images = get_uploaded_images()
+    return render_template('files.html', images=images)
+
 
 @app.route('/<file_name>.txt')
 def send_text_file(file_name):
     """Send your static text file."""
     file_dot_text = file_name + '.txt'
     return app.send_static_file(file_dot_text)
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash("You have been logged out.", "info")
+    return redirect(url_for('home'))
 
 
 @app.after_request
