@@ -13,6 +13,12 @@ class UserProfile(db.Model):
     last_name = db.Column(db.String(80))
     username = db.Column(db.String(80), unique=True)
 
+    def __init__(self, username, email, password):
+        self.username = username
+        self.email = email
+        # Hash the password before storing it
+        self.password = generate_password_hash(password)
+
     def is_authenticated(self):
         return True
 
