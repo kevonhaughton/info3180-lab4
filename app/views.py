@@ -35,13 +35,15 @@ def upload():
         file.save(upload_path)
 
         flash('File uploaded!', 'success')
-        return redirect(url_for('upload')) 
+        return redirect(url_for('upload'))
+    elif request.method == 'POST':
+        flash_errors(form)
     return render_template('upload.html', form=form)
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    form = LoginForm()  # assuming you have a Flask-WTF form called LoginForm
+    form = LoginForm()
     if form.validate_on_submit():  # ensures username and password were entered
         username = form.username.data
         password = form.password.data
@@ -52,54 +54,59 @@ def login():
         if user and check_password_hash(user.password, password):
             login_user(user)  # logs the user in
             flash('You have successfully logged in!', 'success')
-            return redirect(url_for('upload'))  # redirect to /upload route
+            return redirect(url_for('upload'))
         else:
             flash('Invalid username or password', 'danger')
+    elif request.method == 'POST':
+        flash_errors(form)
 
     return render_template('login.html', form=form)
 
-# user_loader callback. This callback is used to reload the user object from
-# the user ID stored in the session
+
+# user_loader callback
 @login_manager.user_loader
 def load_user(id):
     return db.session.execute(db.select(UserProfile).filter_by(id=id)).scalar()
 
+
 ###
-# The functions below should be applicable to all Flask apps.
+# Helper functions
 ###
 
 # Flash errors from the form if validation fails
 def flash_errors(form):
     for field, errors in form.errors.items():
         for error in errors:
-            flash(u"Error in the %s field - %s" % (
-                getattr(form, field).label.text,
-                error
-), 'danger')
-            
+            flash(f"Error in the {getattr(form, field).label.text} field - {error}", 'danger')
+
 
 # Helper function to get list of uploaded images
 def get_uploaded_images():
     uploaded_files = []
     upload_folder = app.config['UPLOAD_FOLDER']
-    
+
     if not os.path.exists(upload_folder):
         return uploaded_files  # Return empty list if folder doesn't exist
 
     for file in os.listdir(upload_folder):
         if file.lower().endswith(('.png', '.jpg', '.jpeg')):  # Filter image files only
             uploaded_files.append(file)
-    
+
     return uploaded_files
 
 
+###
+# Routes for uploaded files
+###
+
 # Route to serve uploaded images
 @app.route('/uploads/<filename>')
+@login_required
 def get_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
-# Route to display list of uploaded images
+# Route to display list of uploaded images in a grid
 @app.route('/files')
 @login_required
 def files():
@@ -114,6 +121,7 @@ def send_text_file(file_name):
     return app.send_static_file(file_dot_text)
 
 
+# Logout route
 @app.route('/logout')
 @login_required
 def logout():
@@ -121,6 +129,10 @@ def logout():
     flash("You have been logged out.", "info")
     return redirect(url_for('home'))
 
+
+###
+# Headers and error handlers
+###
 
 @app.after_request
 def add_header(response):
